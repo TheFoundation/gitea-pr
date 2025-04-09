@@ -66,13 +66,6 @@ runs:
         echo "::error title=⛔ error hint::Support Linux Only"
         exit 1
 
-    - name: Check architecture of the runner
-      if: ${{ runner.arch != 'x64' }}
-      shell: bash
-      run: |
-        echo "::error title=⛔ error hint::Support x64 Architecture Only"
-        exit 1
-
     - name: Get the commit message
       id: commit
       shell: bash
@@ -92,17 +85,18 @@ runs:
 
     - name: Install Tea
       env:
+        TEA_DL_ARCH: '${{ fromJson(''{ "x86": "386", "x64": "amd64", "ARM": "arm", "ARM64": "arm64" }'')[ runner.arch ] }}'
         TEA_DL_URL: "https://dl.gitea.com/tea/${{ inputs.tea-version }}\
-          /tea-${{ inputs.tea-version }}-linux-amd64"
+          /tea-${{ inputs.tea-version }}-linux-"
       shell: bash
       run: |
         if ! command -v tea >/dev/null 2>&1; then
           TEA_DIR=$(mktemp -d -t tmp.XXXX)
           pushd $TEA_DIR
-          wget -q -nc "$TEA_DL_URL"
-          wget -q -nc "${TEA_DL_URL}.sha256"
-          if $(sha256sum --quiet -c "tea-${{ inputs.tea-version }}-linux-amd64.sha256"); then
-            sudo mv "tea-${{ inputs.tea-version }}-linux-amd64" /usr/bin/tea
+          wget -q -nc "${TEA_DL_URL}${TEA_DL_ARCH}"
+          wget -q -nc "${TEA_DL_URL}${TEA_DL_ARCH}.sha256"
+          if $(sha256sum --quiet -c "tea-${{ inputs.tea-version }}-linux-${TEA_DL_ARCH}.sha256"); then
+            sudo mv "tea-${{ inputs.tea-version }}-linux-${TEA_DL_ARCH}" /usr/bin/tea
             sudo chmod +x /usr/bin/tea
             sudo cp -rf /usr/bin/tea $RUNNER_TOOL_CACHE/bin
             popd
