@@ -1,7 +1,7 @@
 # gitea-pr
 Create a new PR on Gitea using Actions. It's designed to streamline workflows where changes made in a GitHub repository need to be reflected in a Gitea repository.
 
-**Note:** This action is designed to run on **Linux x64** runners *only*.
+**Note:** This action is designed to run on **Linux** runners *only*.
 
 ## Features
 
