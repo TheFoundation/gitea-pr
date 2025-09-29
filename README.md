@@ -33,7 +33,7 @@ jobs:
       # ... (Your build/test steps here) ...
 
       - name: Create Gitea PR
-        uses: infinilbas/gitea-pr@v0
+        uses: infinilabs/gitea-pr@v0
         with:
           url: ${{ secrets.GITEA_URL }}       # Your Gitea instance URL
           token: ${{ secrets.GITEA_TOKEN }}   # Your Gitea Personal Access Token
