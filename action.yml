@@ -128,6 +128,7 @@ runs:
         tea login add
         -u "$GIT_SERVER_URL"
         -t "$GIT_SERVER_TOKEN"
+        --insecure
 
     - name: Check for existing pull request
       id: no-pr
