@@ -132,7 +132,7 @@ runs:
         cd "${{ inputs.path || env.GITHUB_WORKSPACE }}" &&
         echo "$PWD" &&
         tea pr -f head -o simple |
-        grep -q ${{ github.ref_name }} &&
+        grep ${{ github.ref_name }} >/dev/null &&
         exit 1 ||
         exit 0
 
