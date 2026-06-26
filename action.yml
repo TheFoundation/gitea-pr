@@ -83,6 +83,32 @@ runs:
         } >> "$GITHUB_OUTPUT"
         cat $GITHUB_OUTPUT
 
+    # FIX: Resolve the PR body from inputs.body-path (takes precedence) or inputs.body.
+    # inputs.* are passed via env: to avoid script-injection vulnerabilities.
+    - name: Resolve PR body
+      id: pr-body
+      shell: bash
+      env:
+        INPUT_BODY: ${{ inputs.body }}
+        INPUT_BODY_PATH: ${{ inputs.body-path }}
+      run: |
+        # If body-path is set, read the file; otherwise fall back to the body input.
+        if [ -n "${INPUT_BODY_PATH}" ]; then
+          if [ ! -f "${INPUT_BODY_PATH}" ]; then
+            echo "::error title=⛔ error hint::body-path file not found: ${INPUT_BODY_PATH}"
+            exit 1
+          fi
+          RESOLVED_BODY=$(cat "${INPUT_BODY_PATH}")
+        else
+          RESOLVED_BODY="${INPUT_BODY}"
+        fi
+        # Write multiline-safe output using the heredoc delimiter pattern.
+        {
+          echo "PR_BODY<<EOF"
+          printf '%s\n' "${RESOLVED_BODY}"
+          echo "EOF"
+        } >> "$GITHUB_OUTPUT"
+
     - name: Install Tea
       env:
         TEA_DL_ARCH: '${{ fromJson(''{ "x86": "386", "x64": "amd64", "ARM": "arm", "ARM64": "arm64" }'')[ runner.arch ] }}'
@@ -136,16 +162,18 @@ runs:
         exit 1 ||
         exit 0
 
+    # FIX: Use PR_BODY (from the Resolve PR body step) instead of COMMIT_DESC.
+    # COMMIT_DESC is removed from env to avoid confusion.
     - name: Create pull request
       if: steps.no-pr.outcome == 'success'
       env:
         COMMIT_MSG: ${{ steps.commit.outputs.COMMIT_MSG }}
-        COMMIT_DESC: ${{ steps.commit.outputs.COMMIT_DESC }}
+        PR_BODY: ${{ steps.pr-body.outputs.PR_BODY }}
       shell: bash
       run: >-
         cd "${{ inputs.path || env.GITHUB_WORKSPACE }}" &&
         echo "$PWD" &&
-        tea pr create --head "${{ inputs.branch }}" --base "${{ inputs.base }}" --title "${COMMIT_MSG}" --description "${COMMIT_DESC}" --assignees "${{ inputs.assignee }}" --labels "${{ inputs.pr-label }}"
+        tea pr create --head "${{ inputs.branch }}" --base "${{ inputs.base }}" --title "${COMMIT_MSG}" --description "${PR_BODY}" --assignees "${{ inputs.assignee }}" --labels "${{ inputs.pr-label }}"
 
     - name: Skip pull request
       if: steps.no-pr.outcome == 'failure'
@@ -153,3 +181,4 @@ runs:
       run: >
           echo "::error title=⛔ error hint::
           A PR already exists for this branch: ${{ github.ref_name }}"
+
