@@ -1,17 +1,49 @@
 # gitea-pr
-Create a new PR on Gitea using Actions. It's designed to streamline workflows where changes made in a GitHub repository need to be reflected in a Gitea repository.
 
-**Note:** This action is designed to run on **Linux** runners *only*.
+Create a new PR on Gitea using Actions. Designed to streamline workflows where
+changes made in a GitHub repository need to be reflected in a Gitea repository.
+
+**Note:** This action runs on **Linux** runners only.
 
 ## Features
 
-*   Creates a pull request on a Gitea instance.
-*   Uses a Personal Access Token (PAT) for authentication.
-*   Sets the PR title and body based on the commit message (or custom values).
-*   Assigns a user to the pull request.
-*   Applies a specified label to the created PR.
-*   Checks for existing pull requests for the same branch to avoid duplicates.
-*   Uses `tea` CLI, default version is `0.9.2`
+- Creates a pull request on a Gitea instance by POSTing JSON directly to the
+  Gitea REST API (`/repos/{owner}/{repo}/pulls`) — no `tea` CLI, no binary to
+  install or cache.
+- Uses a Personal Access Token (PAT) for authentication, sent as an
+  `Authorization: token <PAT>` header.
+- Sets the PR title and body based on the commit message (or custom values).
+- Assigns users and applies labels to the created PR.
+- Checks for an existing open pull request on the same branch to avoid
+  duplicates.
+
+## How it works
+
+1. **Commit & push:** If there are local changes in `path`, they're committed
+   with the given `author`/`committer` (and optional `Signed-off-by` line),
+   then pushed to `branch` on the Gitea `remote`.
+2. **Resolve owner/repo:** The script reads `git remote get-url <remote>` and
+   parses the Gitea `owner/repo` from it — no separate input needed.
+3. **Check for an existing PR:** `GET /repos/{owner}/{repo}/pulls?state=open`
+   — if one already targets `branch`, its URL/number are returned and no new
+   PR is created.
+4. **Create the PR:** otherwise, a single JSON POST is made:
+
+   ```
+   POST {url}/api/v1/repos/{owner}/{repo}/pulls
+   Authorization: token <PAT>
+   Content-Type: application/json
+
+   {
+     "base": "main",
+     "head": "content",
+     "title": "first pr",
+     "body": "This is a PR!"
+   }
+   ```
+
+   (`labels` and `assignees` are added to the payload when `pr-label` /
+   `assignee` are set — label names are resolved to Gitea label IDs first.)
 
 ## Usage
 
@@ -28,59 +60,60 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       # ... (Your build/test steps here) ...
 
       - name: Create Gitea PR
-        uses: infinilabs/gitea-pr@v0
+        uses: thefoundation/gitea-pr@v1
         with:
           url: ${{ secrets.GITEA_URL }}       # Your Gitea instance URL
           token: ${{ secrets.GITEA_TOKEN }}   # Your Gitea Personal Access Token
-          path: ${{ github.workspace }}          # Optional: Path to the repository (defaults to workspace root)
-          commit-message: 'Updated from GitHub Actions'  # Optional: Custom commit message
-          committer: 'GitHub Actions <actions@github.com>' # Optional: Custom committer
-          author: '${{ github.actor }} <${{ github.actor_id }}+${{ github.actor }}@users.noreply.github.com>' # Optional: Custom author
-          signoff: 'false'                             # Optional: Add Signed-off-by line (default: false)
-          base: 'main'                                # The target branch in Gitea (default: main or master, according to Gitea config)
-          branch: 'feature/my-feature'                 # The source branch for the PR (defaults to a generated branch name)
-          title: 'My Awesome Pull Request'               # Optional: Custom PR title
-          body: 'This PR was created automatically.'       # Optional: Custom PR body
-          pr-label: 'your-label'                         # Optional, add label to your PR
-          assignee: 'your-gitea-username'        # Optional, Assign user to your PR
-          tea-version: '0.9.2'            # Optional: Specify a different tea version, default value '0.9.2'
+          path: ${{ github.workspace }}       # Optional: path to the repository
+          remote: 'origin'                    # Optional: git remote pointing at Gitea
+          commit-message: 'Updated from GitHub Actions'
+          committer: 'GitHub Actions <actions@github.com>'
+          author: '${{ github.actor }} <${{ github.actor_id }}+${{ github.actor }}@users.noreply.github.com>'
+          signoff: 'false'
+          base: 'main'
+          branch: 'feature/my-feature'
+          title: 'My Awesome Pull Request'
+          body: 'This PR was created automatically.'
+          pr-label: 'your-label'
+          assignee: 'your-gitea-username'
 ```
 
 ## Inputs
 
-| Input                    | Data type | Description                                                                                                                                                                                            | Required | Default                                                                                                                                               |
-| ------------------------ | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `url`                    | String    | URL to the Gitea instance.                                                                                                                                                                         | **Yes**  |                                                                                                                                                     |
-| `token`                  | String    | Personal access token (PAT) for the Gitea instance.  This should be stored as a GitHub secret.                                                                                                        | **Yes**  |                                                                                                                                                     |
-| `path`                   | String    | Relative path under `$GITHUB_WORKSPACE` to the repository. Defaults to `$GITHUB_WORKSPACE`.                                                                                                              | No       | `$GITHUB_WORKSPACE`                                                                                                                                    |
-| `commit-message`         | String    | The message to use when committing changes.                                                                                                                                                           | No       | `'[create-pull-request] automated change'`                                                                                                              |
-| `committer`              | String    | The committer name and email address in the format `Display Name <email@address.com>`. Defaults to the GitHub Actions bot user.                                                                    | No       | `'github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>'`                                                                      |
-| `author`                 | String    | The author name and email address in the format `Display Name <email@address.com>`. Defaults to the user who triggered the workflow run.                                                               | No       | `${{ github.actor }} <${{ github.actor_id }}+${{ github.actor }}@users.noreply.github.com>`                                                          |
-| `signoff`               | String     | Add `Signed-off-by` line by the committer at the end of the commit log message.                                                                                                                       | No       | `'false'`                                                                                                                                               |
-| `base`                   | String    | The pull request base branch (the branch you want to merge *into*).  Defaults to the default branch of the Gitea repository (usually `main` or `master`).                                          | No       |                                                                                                                                                     |
-| `branch`                | String   | The pull request branch name (the branch containing the changes you want to merge).                                               | No      |  `'create-pull-request/patch'`                                                                   |
-| `title`                  | String    | The title of the pull request.                                                                                                                                                                      | No       | `'Changes by create-pull-request action'`                                                                                                              |
-| `body`                   | String    | The body of the pull request.                                                                                                                                                                      | No       | `'Automated changes by actions'`                                                                                                                   |
-|`body-path` | String | Path to file that contains the pull request body. Takes precedence over `body`. | No | |
-| `pr-label`             | String     | Comma-separated list of labels to add to the pull request.                                                                                                                                             | No       |                                                                                                                                                     |
-|`assignee`| String     |  Gitea username to assign to the pull request.                                                  | No       ||
-| `tea-version`            | String    | The version of the `tea` CLI to use.                                                                                                                                                                   | **Yes**  | `0.9.2`                                                                                                                                          |
+| Input            | Data type | Description                                                                                             | Required | Default                                                                                     |
+| ---------------- | --------- | --------------------------------------------------------------------------------------------------------- | -------- | -------------------------------------------------------------------------------------------- |
+| `url`            | String    | URL to the Gitea instance.                                                                               | **Yes**  |                                                                                              |
+| `token`          | String    | Gitea PAT. Store as a GitHub secret.                                                                     | **Yes**  |                                                                                              |
+| `path`           | String    | Relative path under `$GITHUB_WORKSPACE` to the repository.                                               | No       | `$GITHUB_WORKSPACE`                                                                          |
+| `remote`         | String    | Name of the git remote pointing at the Gitea repository.                                                 | No       | `origin`                                                                                     |
+| `commit-message` | String    | Commit message used when committing local changes.                                                       | No       | `'[create-pull-request] automated change'`                                                   |
+| `committer`      | String    | Committer name/email, `Display Name <email@address.com>`.                                                | No       | `'github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>'`              |
+| `author`         | String    | Author name/email, `Display Name <email@address.com>`.                                                   | No       | `${{ github.actor }} <${{ github.actor_id }}+${{ github.actor }}@users.noreply.github.com>` |
+| `signoff`        | String    | Add `Signed-off-by` line.                                                                                 | No       | `'false'`                                                                                    |
+| `base`           | String    | PR base branch. Defaults to the Gitea repo's default branch if omitted.                                  | No       |                                                                                               |
+| `branch`         | String    | PR head/source branch.                                                                                   | No       | `'create-pull-request/patch'`                                                                |
+| `title`          | String    | PR title.                                                                                                 | No       | `'Changes by create-pull-request action'`                                                    |
+| `body`           | String    | PR body.                                                                                                  | No       | `'Automated changes by actions'`                                                             |
+| `body-path`      | String    | Path to a file containing the PR body. Takes precedence over `body`.                                     | No       |                                                                                               |
+| `pr-label`       | String    | Comma-separated list of labels to add.                                                                    | No       |                                                                                               |
+| `assignee`       | String    | Comma-separated list of Gitea usernames to assign.                                                        | No       |                                                                                               |
+
+## Outputs
+
+| Output       | Description                                        |
+| ------------ | --------------------------------------------------- |
+| `pr-url`     | URL of the created (or already-existing) pull request. |
+| `pr-number`  | Number of the created (or already-existing) pull request. |
 
 ## Prerequisites
 
-*   **Gitea Personal Access Token (PAT):** You need a Gitea PAT with the necessary permissions (`repo` scope, or at least `repo:status`, `repo:contents`, `repo:pulls`, and `write:repo_hooks` if you want to trigger Gitea CI).  Create this token in your Gitea user settings.
-*   **GitHub Secrets:** Store your Gitea PAT as a secret in your GitHub repository settings (e.g., `GITEA_TOKEN`).  Also store your Gitea instance URL as a secret (e.g. `GITEA_URL`)
-* **`tea` CLI:** This action relies on the `tea` CLI tool being installed. It will install version 0.9.2 by default.  You can override this with the `tea-version` input.
-
-## How it Works
-
-1.  **Checks for Existing PR:** The action first checks if a pull request already exists for the current branch to avoid creating duplicates.
-2.  **Installs `tea` (if necessary):** The action downloads and installs a specific version of `tea` (0.9.2 by default), if not already cached in `/opt/hostedtoolcache/bin`.
-3.  **Logs in to Gitea:**  It uses the provided Gitea URL and token to authenticate with the Gitea instance using `tea login add`.
-4.  **Creates the Pull Request:** If no existing PR is found, it uses `tea pr create` to create a new pull request with the specified title, body, base branch, and head branch.  It also applies the provided label and assignee, if specified.
-5.  **Skips if PR Exists:** If a PR already exists for the branch, the action will output an error message and skip the PR creation step.
+- **Gitea Personal Access Token (PAT):** needs `repo` scope (or at least
+  `repo:status`, `repo:contents`, and `repo:pulls`).
+- **GitHub Secrets:** store the PAT and Gitea instance URL as secrets (e.g.
+  `GITEA_TOKEN`, `GITEA_URL`).
+- **Python 3:** installed automatically by the action via `actions/setup-python`.
