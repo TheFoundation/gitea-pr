@@ -45,14 +45,14 @@ inputs:
     description: 'The title of the pull request'
     required: false
     default: 'Changes by create-pull-request action'
-  body:
-    description: 'The body of the pull request'
-    required: false
-    default: 'Automated changes by actions'
   body-path:
     description: 'Path to a file containing the pull request body. Takes precedence over body.'
     required: false
     default: ''
+  body:
+    description: 'The body of the pull request. Ignored if body-path is set.'
+    required: false
+    default: 'Automated changes by actions'
   pr-label:
     description: 'Comma-separated list of labels to add to the pull request'
     required: false

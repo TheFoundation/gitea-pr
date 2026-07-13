@@ -76,7 +76,6 @@ def main():
     base = env("PR_BASE")
     branch = env("PR_BRANCH")
     title = env("PR_TITLE")
-    body = env("PR_BODY")
     body_path = env("PR_BODY_PATH")
     labels_raw = env("PR_LABELS")
     assignees_raw = env("PR_ASSIGNEES")
@@ -88,9 +87,12 @@ def main():
         print("::error::'branch' input is required.")
         sys.exit(1)
 
+    # body-path takes precedence over body when both are set.
     if body_path:
         with open(body_path, "r") as f:
             body = f.read()
+    else:
+        body = env("PR_BODY")
 
     remote_url = run(["git", "remote", "get-url", remote_name])
     owner, repo = parse_owner_repo(remote_url)
