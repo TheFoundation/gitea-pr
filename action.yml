@@ -1,6 +1,7 @@
 name: 'Gitea Pull Request'
 description: 'Create a new PR for Gitea using the Gitea REST API (Python + JSON), no tea CLI required.'
 author: 'thefoundation'
+icon: 'activity'
 
 inputs:
   url:
